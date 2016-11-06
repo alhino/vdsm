@@ -20,6 +20,7 @@
 
 import json
 import os
+import pprint
 from functools import partial
 
 from monkeypatch import MonkeyPatch, MonkeyPatchScope
@@ -442,8 +443,6 @@ class TestMap(TestCaseBase):
 
     @permutations([
         # format, qcow2_compat
-        (qemuimg.FORMAT.RAW, "0.10"),
-        (qemuimg.FORMAT.RAW, "1.1"),
         (qemuimg.FORMAT.QCOW2, "0.10"),
         (qemuimg.FORMAT.QCOW2, "1.1"),
     ])
@@ -459,50 +458,6 @@ class TestMap(TestCaseBase):
                 {
                     "start": 0,
                     "length": size,
-                    "data": False,
-                    "zero": True,
-                },
-            ]
-
-            self.check_map(qemuimg.map(image), expected)
-
-    @permutations([
-        # length, qcow2_compat
-        (4 * 1024, "0.10"),
-        (4 * 1024, "1.1"),
-        (64 * 1024, "0.10"),
-        (64 * 1024, "1.1"),
-    ])
-    def test_one_block_raw(self, length, qcow2_compat):
-        with namedTemporaryDir() as tmpdir:
-            size = 1048576
-            offset = 64 * 1024
-            image = os.path.join(tmpdir, "base.img")
-            fmt = qemuimg.FORMAT.RAW
-            qemuimg.create(image, size=size, format=fmt)
-            qemu_pattern_write(image, fmt, offset=offset, len=length,
-                               pattern=0xf0)
-
-            expected = [
-                # run 1 - empty
-                {
-                    "start": 0,
-                    "length": offset,
-                    "data": False,
-                    "zero": True,
-                },
-                # run 2 - data
-                {
-                    "start": offset,
-                    "offset": offset,
-                    "length": length,
-                    "data": True,
-                    "zero": False,
-                },
-                # run 3 - empty
-                {
-                    "start": offset + length,
-                    "length": size - offset - length,
                     "data": False,
                     "zero": True,
                 },
@@ -531,7 +486,7 @@ class TestMap(TestCaseBase):
                 # run 1 - empty
                 {
                     "start": 0,
-                    "length": offset,
+                    "length": 0,
                     "data": False,
                     "zero": True,
                 },
@@ -554,10 +509,13 @@ class TestMap(TestCaseBase):
             self.check_map(qemuimg.map(image), expected)
 
     def check_map(self, actual, expected):
-        self.assertEqual(len(actual), len(expected))
+        if len(expected) != len(actual):
+            raise Failure("Size differ", expected, actual)
+
         for actual, expected in zip(actual, expected):
             for key in expected:
-                self.assertEqual(actual[key], expected[key])
+                if expected[key] != actual[key]:
+                    raise Failure("%s value differ" % key, expected, actual)
 
 
 def make_image(path, size, format, index, qcow2_compat, backing=None):
@@ -566,3 +524,20 @@ def make_image(path, size, format, index, qcow2_compat, backing=None):
     offset = index * 1024
     qemu_pattern_write(path, format, offset=offset, len=1024,
                        pattern=0xf0 + index)
+
+
+class Failure(AssertionError):
+
+    def __init__(self, message, expected, actual):
+        self.message = message
+        self.expected = expected
+        self.actual = actual
+
+    def __str__(self):
+        text = self.message + "\n"
+        text += "Expected:\n"
+        text += pprint.pformat(self.expected) + "\n"
+        text += "\n"
+        text += "Actual:\n"
+        text += pprint.pformat(self.actual) + "\n"
+        return text
