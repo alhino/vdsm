@@ -20,6 +20,7 @@
 
 import json
 import os
+import pprint
 from functools import partial
 
 from monkeypatch import MonkeyPatch, MonkeyPatchScope
@@ -531,7 +532,7 @@ class TestMap(TestCaseBase):
                 # run 1 - empty
                 {
                     "start": 0,
-                    "length": offset,
+                    "length": 0,
                     "data": False,
                     "zero": True,
                 },
@@ -554,10 +555,13 @@ class TestMap(TestCaseBase):
             self.check_map(qemuimg.map(image), expected)
 
     def check_map(self, actual, expected):
-        self.assertEqual(len(actual), len(expected))
+        if len(expected) != len(actual):
+            raise Failure("Size differ", expected, actual)
+
         for actual, expected in zip(actual, expected):
             for key in expected:
-                self.assertEqual(actual[key], expected[key])
+                if expected[key] != actual[key]:
+                    raise Failure("%s value differ" % key, expected, actual)
 
 
 def make_image(path, size, format, index, qcow2_compat, backing=None):
@@ -566,3 +570,20 @@ def make_image(path, size, format, index, qcow2_compat, backing=None):
     offset = index * 1024
     qemu_pattern_write(path, format, offset=offset, len=1024,
                        pattern=0xf0 + index)
+
+
+class Failure(AssertionError):
+
+    def __init__(self, message, expected, actual):
+        self.message = message
+        self.expected = expected
+        self.actual = actual
+
+    def __str__(self):
+        text = self.message + "\n"
+        text += "Expected:\n"
+        text += pprint.pformat(self.expected) + "\n"
+        text += "\n"
+        text += "Actual:\n"
+        text += pprint.pformat(self.actual) + "\n"
+        return text
