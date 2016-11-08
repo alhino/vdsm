@@ -20,6 +20,7 @@
 
 import json
 import os
+import subprocess
 import pprint
 from functools import partial
 
@@ -581,6 +582,10 @@ class MapMismatch(AssertionError):
         self.message = message
         self.expected = expected
         self.actual = actual
+        try:
+            self.fsinfo = subprocess.check_output(["df", "-hT", "/var/tmp"])
+        except:
+            self.fsinfo = "Failed to run df -hT /var/tmp"
 
     def __str__(self):
         text = self.message + "\n"
@@ -590,4 +595,6 @@ class MapMismatch(AssertionError):
         text += "\n"
         text += "Actual map:\n"
         text += pprint.pformat(self.actual) + "\n"
+        text += "Filssystem info:\n"
+        text += self.fsinfo
         return text
