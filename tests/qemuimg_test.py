@@ -486,7 +486,7 @@ class TestMap(TestCaseBase):
                 # run 1 - empty
                 {
                     "start": 0,
-                    "length": 0,
+                    "length": offset,
                     "data": False,
                     "zero": True,
                 },
